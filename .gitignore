@@ -1,0 +1,17 @@
+.env
+.env.*
+
+.live.*
+docker-compose.override.yml
+
+website/jscache/*
+website/files/*
+!website/files/.gitkeep
+
+directus/uploads/*
+directus/database/*
+!directus/uploads/.gitkeep
+
+node_modules/
+
+cloud-init.yaml

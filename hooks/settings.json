@@ -1,0 +1,21 @@
+[
+    {
+        "id": "deploy",
+        "command-working-directory": "/home/gaia/klimarechner",
+        "execute-command": "hooks/deploy.sh",
+
+        "include-command-output-in-response": true,
+        "include-command-output-in-response-on-error": true,
+
+        "trigger-rule": {
+            "match": {
+                "type": "value",
+                "value": "{{ getenv "HOOK_KEY" | js }}",
+                "parameter": {
+                    "source": "query",
+                    "name": "key"
+                }
+            }
+        }
+    }
+]

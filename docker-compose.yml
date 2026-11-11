@@ -1,0 +1,116 @@
+version: "3"
+
+services:
+    proxy:
+        container_name: "proxy"
+        image: jwilder/nginx-proxy
+        ports:
+            - 80:80/tcp
+            - 443:443/tcp
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        networks:
+            - default
+            - directus
+        volumes:
+            - "/var/run/docker.sock:/tmp/docker.sock:ro"
+            - "nginx_certs:/etc/nginx/certs:ro"
+            - "nginx_vhosts:/etc/nginx/vhost.d"
+            - "nginx_html:/usr/share/nginx/html"
+            - "./proxy/conf.d/compression.conf:/etc/nginx/conf.d/compression.conf:ro"
+        restart: unless-stopped
+
+    letsencrypt:
+        container_name: "letsencrypt"
+        image: nginxproxy/acme-companion
+        volumes:
+            - "/var/run/docker.sock:/var/run/docker.sock:ro"
+            - "nginx_certs:/etc/nginx/certs:rw"
+            - "nginx_vhosts:/etc/nginx/vhost.d"
+            - "nginx_html:/usr/share/nginx/html"
+            - "nginx_acme:/etc/acme.sh"
+        environment:
+            DEFAULT_EMAIL: ${DEVOPS_EMAIL}
+            NGINX_PROXY_CONTAINER: "proxy"
+        restart: unless-stopped
+
+    website:
+        image: nginx:mainline-alpine
+        container_name: "website"
+        volumes:
+            - "./website/files:/srv/website"
+            - "./website/default.conf:/etc/nginx/conf.d/default.conf"
+            - "./website/jscache:/var/run/nginx-cache/jscache"
+        restart: unless-stopped
+        depends_on:
+            - proxy
+
+    database:
+        container_name: database
+        image: postgis/postgis:13-master
+        volumes:
+            - ./directus/database:/var/lib/postgresql/data
+        networks:
+            - directus
+        env_file:
+            - .env.database
+        restart: unless-stopped
+
+    cache:
+        container_name: cache
+        image: redis:6
+        networks:
+            - directus
+        restart: unless-stopped
+
+    directus:
+        container_name: directus
+        image: directus/directus:10.6
+        ports:
+            - 8055:8055
+        volumes:
+            - ./directus/uploads:/directus/uploads
+            - ./directus/extensions:/directus/extensions
+        networks:
+            - directus
+        depends_on:
+            - cache
+            - database
+        env_file:
+            - .env.directus
+        environment:
+            DB_CLIENT: "pg"
+            DB_HOST: "database"
+            DB_PORT: "5432"
+            REDIS_HOST: "cache"
+            REDIS_PORT: "6379"
+            CACHE_ENABLED: "true"
+            CACHE_STORE: "redis"
+            RATE_LIMITER_STORE: "redis"
+            SYNCHRONIZATION_STORE: "redis"
+            MESSENGER_STORE: "redis"
+        restart: unless-stopped
+
+    monitor:
+        container_name: monitor
+        image: louislam/uptime-kuma:1
+        ports:
+            - 3001:3001
+        volumes:
+            - kuma:/app/data
+        restart: unless-stopped
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.75"
+                    memory: 1G
+
+volumes:
+    nginx_certs:
+    nginx_vhosts:
+    nginx_html:
+    nginx_acme:
+    kuma:
+
+networks:
+    directus:
